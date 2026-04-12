@@ -1,0 +1,50 @@
+/**
+ * Example: How to modify app.js to add broadcast endpoint
+ * 
+ * This file shows the relevant section of app.js with the
+ * broadcast endpoint added. Only the highlighted section
+ * needs to be modified.
+ */
+
+// ... existing code above ...
+
+// ============================================
+// ADD THESE 2 LINES BEFORE app.use('/api', nodeapi());
+// ============================================
+const broadcast = require('./broadcast');
+broadcast.setup(app, client);
+// ============================================
+
+// Existing API routes - KEEP THIS LINE
+app.use('/api', nodeapi());
+
+// ... rest of existing code below ...
+
+
+/**
+ * FULL CONTEXT EXAMPLE:
+ * 
+ * Your app.js probably looks something like this:
+ * 
+ *     // ... imports and setup ...
+ *     
+ *     // Database setup
+ *     // ...
+ *     
+ *     // RPC client setup
+ *     var client = new bitcoin.Client({...});
+ *     
+ *     // Routes
+ *     app.use('/', routes);
+ *     
+ *     // === ADD BROADCAST HERE ===
+ *     const broadcast = require('./broadcast');
+ *     broadcast.setup(app, client);
+ *     // ==========================
+ *     
+ *     app.use('/api', nodeapi());
+ *     app.use('/ext', extapi());
+ *     
+ *     // ... error handlers, etc ...
+ * 
+ */

@@ -1,0 +1,129 @@
+================================================================================
+DORKCOIN EXPLORER - BROADCAST ENDPOINT FIX
+================================================================================
+
+PROBLEM ANALYSIS
+----------------
+The current implementation has 3 critical issues:
+
+1. Function "initBroadcast" is defined but NEVER CALLED
+2. Route order is WRONG - nodeapi catch-all route is registered first
+3. Variable 'client' is declared but never assigned before being passed
+
+CURRENT BROKEN CODE (from your screenshot):
+-------------------------------------------
+    let client;
+    
+    function initBroadcast(c) {
+      const broadcast = require('./broadcast');
+      broadcast.setup(app, c);  // 'c' is parameter, but function never called!
+    }
+    
+    // routes
+    app.use('/api', nodeapi.app);  // This catches ALL /api/* requests FIRST
+    app.use('/', routes);
+
+WHY IT FAILS:
+-------------
+- nodeapi.app has a catch-all route like: app.get('/{*splat}', ...)
+- This intercepts /api/broadcast before your broadcast endpoint can handle it
+- Result: "This method is disabled" (the catch-all response)
+
+================================================================================
+CORRECTED IMPLEMENTATION
+================================================================================
+
+STEP 1: Ensure broadcast.js file exists in same folder as app.js
+----------------------------------------------------------------
+File: broadcast.js (should already exist from previous setup)
+
+STEP 2: Modify app.js with this EXACT code
+------------------------------------------
+Find the section in your app.js that looks similar to this pattern,
+then REPLACE it with the code below:
+
+    // ============================================
+    // CORRECT BROADCAST SETUP - ADD THESE LINES
+    // ============================================
+    // Make sure 'client' is your RPC client instance (bitcoin.Client)
+    // It should already be defined earlier in your app.js like:
+    // var client = new bitcoin.Client({...});
+    
+    const broadcast = require('./broadcast');
+    broadcast.setup(app, client);
+    // ============================================
+    
+    // EXISTING Iquidus API - MUST COME AFTER broadcast setup
+    app.use('/api', nodeapi());
+    
+    // Other routes...
+    app.use('/', routes);
+
+IMPORTANT NOTES:
+----------------
+1. REMOVE the unused "initBroadcast" function - it's not needed
+2. broadcast.setup() MUST be called BEFORE app.use('/api', nodeapi())
+3. The 'client' variable must be your active RPC client instance
+4. Do NOT wrap broadcast.setup() inside another function
+
+STEP 3: Restart the explorer
+----------------------------
+    npm stop
+    npm start
+
+    Or with PM2:
+    pm2 restart explorer
+
+STEP 4: Test the endpoint
+-------------------------
+Open browser and test:
+    https://explorer.dorkcoin.org/api/broadcast?hex=010000
+
+Expected result (hex too short but format valid):
+    {"error":"Invalid hex format - must be hexadecimal string"}
+    OR
+    {"error":"TX decode failed"}
+
+This means the endpoint is WORKING! The error is from the node RPC,
+not from the catch-all route.
+
+================================================================================
+VERIFICATION CHECKLIST
+================================================================================
+
+After restart, verify in this order:
+
+1. Check if broadcast endpoint is registered:
+   Look in your logs for: "[Broadcast] Endpoint /api/broadcast registered successfully"
+
+2. Test with invalid hex:
+   https://explorer.dorkcoin.org/api/broadcast?hex=xyz
+   Expected: {"error":"Invalid hex format - must be hexadecimal string"}
+
+3. Test with valid short hex:
+   https://explorer.dorkcoin.org/api/broadcast?hex=010000
+   Expected: Some error about transaction format (this is GOOD - means RPC is working)
+
+4. If you still see "This method is disabled":
+   The route order is still wrong. Check that broadcast.setup() is BEFORE nodeapi().
+
+================================================================================
+ROLLBACK (if needed)
+================================================================================
+
+To remove broadcast endpoint:
+1. Remove these 2 lines from app.js:
+       const broadcast = require('./broadcast');
+       broadcast.setup(app, client);
+2. Delete broadcast.js
+3. Restart explorer
+
+================================================================================
+SUPPORT
+================================================================================
+
+For issues with this setup, contact the Dorkcoin wallet development team.
+
+================================================================================
+END OF FILE
+================================================================================
